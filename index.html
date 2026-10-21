@@ -1,0 +1,1537 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>蛇货战绩数据大屏</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root{
+  --bg:#020510; --bg2:#0a1024; --card:rgba(15,25,50,.7);
+  --line:rgba(0,229,255,.2); --text:#dce8ff; --text2:#5a7099;
+  --cyan:#00e5ff; --green:#00ff9d; --red:#ff4d6d; --yellow:#ffd166;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:"Microsoft YaHei",sans-serif;min-height:100vh;overflow-x:hidden}
+/* 大屏背景 */
+body::before{content:"";position:fixed;inset:0;background:
+  radial-gradient(ellipse at 50% 0%,rgba(0,229,255,.15),transparent 60%),
+  radial-gradient(ellipse at 0% 100%,rgba(0,255,157,.08),transparent 50%),
+  radial-gradient(ellipse at 100% 100%,rgba(255,77,109,.06),transparent 50%);
+  z-index:0}
+.grid-bg{position:fixed;inset:0;background-image:
+  linear-gradient(rgba(0,229,255,.04) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(0,229,255,.04) 1px,transparent 1px);
+  background-size:60px 60px;z-index:0;pointer-events:none;
+  mask-image:radial-gradient(ellipse at center,black 20%,transparent 80%)}
+.scanline{position:fixed;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,rgba(0,229,255,.6),transparent);animation:scan 8s linear infinite;z-index:1;pointer-events:none}
+@keyframes scan{0%{top:0}100%{top:100%}}
+
+.wrap{position:relative;z-index:2;max-width:1600px;margin:0 auto;padding:20px}
+
+/* 顶部大屏标题 */
+.big-title{text-align:center;padding:10px 0 20px;position:relative}
+.big-title h1{font-size:42px;font-weight:900;letter-spacing:8px;background:linear-gradient(180deg,#fff 30%,var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(0 0 20px rgba(0,229,255,.5))}
+.big-title .sub{color:var(--text2);font-size:13px;letter-spacing:4px;margin-top:6px}
+.big-title .deco{position:absolute;left:50%;transform:translateX(-50%);bottom:0;width:60%;height:2px;background:linear-gradient(90deg,transparent,var(--cyan),transparent)}
+
+/* 工具栏 */
+.toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px}
+.tabs{display:flex;gap:6px}
+.tab{padding:8px 20px;border-radius:4px;cursor:pointer;color:var(--text2);font-size:13px;border:1px solid var(--line);background:var(--card);transition:all .3s;clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%)}
+.tab.active{background:linear-gradient(135deg,var(--cyan),#0099cc);color:#000;font-weight:700}
+.btns{display:flex;gap:8px}
+.btn{padding:8px 16px;border-radius:4px;cursor:pointer;font-size:12px;border:1px solid var(--line);background:var(--card);color:var(--text);transition:all .3s;clip-path:polygon(6px 0,100% 0,calc(100% - 6px) 100%,0 100%)}
+.btn:hover{border-color:var(--cyan);color:var(--cyan);box-shadow:0 0 15px rgba(0,229,255,.3)}
+.btn.cyan{background:linear-gradient(135deg,var(--cyan),#0099cc);color:#000;border:none;font-weight:700}
+
+/* 总览4卡 */
+.kpi{display:grid;grid-template-columns:repeat(6,1fr);gap:16px;margin-bottom:20px}
+.kpi-card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:20px;position:relative;overflow:hidden;clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px)}
+.kpi-card::before{content:"";position:absolute;top:0;left:0;width:100%;height:2px;background:linear-gradient(90deg,var(--cyan),transparent)}
+.kpi-card .lbl{color:var(--text2);font-size:12px;letter-spacing:2px;margin-bottom:10px}
+.kpi-card .val{font-size:38px;font-weight:900;font-family:"Consolas",monospace;line-height:1}
+.kpi-card .val.green{color:var(--green);text-shadow:0 0 30px rgba(0,255,157,.5)}
+.kpi-card .val.red{color:var(--red);text-shadow:0 0 30px rgba(255,77,109,.5)}
+.kpi-card .val.cyan{color:var(--cyan);text-shadow:0 0 30px rgba(0,229,255,.5)}
+.kpi-card .val.yellow{color:var(--yellow);text-shadow:0 0 30px rgba(255,209,102,.5)}
+.kpi-card .val.purple{color:#a78bfa;text-shadow:0 0 30px rgba(167,139,250,.5)}
+.kpi-card .sub{font-size:11px;color:var(--text2);margin-top:10px}
+
+/* 主体两栏 */
+.main{display:grid;grid-template-columns:1.2fr 1fr;gap:16px;margin-bottom:20px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px;position:relative}
+.panel::before{content:"";position:absolute;top:0;left:0;width:100%;height:2px;background:linear-gradient(90deg,var(--cyan),transparent)}
+.panel h3{font-size:14px;color:var(--cyan);margin-bottom:14px;letter-spacing:2px;display:flex;align-items:center;gap:8px}
+.panel h3::before{content:"◤";font-size:10px}
+
+/* 项目排名表 */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{color:var(--text2);font-weight:400;padding:8px 6px;text-align:right;border-bottom:1px solid var(--line);font-size:11px;letter-spacing:1px}
+th:first-child,td:first-child{text-align:left}
+td{padding:8px 6px;text-align:right;border-bottom:1px solid rgba(0,229,255,.08);font-family:"Consolas",monospace}
+tr{transition:background .2s}
+tr:hover{background:rgba(0,229,255,.05)}
+td.name{font-family:"Microsoft YaHei";font-weight:600}
+.pos{color:var(--green)} .neg{color:var(--red)} .zero{color:var(--text2)}
+.medal{display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;border-radius:4px;font-size:11px;font-weight:800;margin-right:4px}
+.m1{background:linear-gradient(135deg,#ffd700,#ffaa00);color:#000;box-shadow:0 0 10px rgba(255,215,0,.5)}
+.m2{background:linear-gradient(135deg,#e0e0e0,#999);color:#000}
+.m3{background:linear-gradient(135deg,#cd7f32,#8b4513);color:#fff}
+.mn{background:var(--bg2);color:var(--text2)}
+
+/* 底部图表 */
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+.charts3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px}
+#barChart{height:320px}
+#trendChart{height:320px}
+#heatChart{height:420px}
+#radarChart{height:380px}
+#roiChart{height:320px}
+#winRateChart{height:320px}
+
+/* 录入抽屉 */
+.drawer{position:fixed;top:0;right:-520px;width:480px;max-width:92vw;height:100vh;background:#0a1228;border-left:1px solid var(--cyan);z-index:100;transition:right .4s ease;overflow-y:auto;padding:24px;box-shadow:-10px 0 40px rgba(0,0,0,.5)}
+.drawer.open{right:0}
+.drawer h3{color:var(--cyan);margin-bottom:16px;letter-spacing:2px}
+.drawer .close{position:absolute;top:16px;right:16px;background:none;border:none;color:var(--text2);font-size:24px;cursor:pointer}
+.drawer textarea{width:100%;height:70px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px;color:var(--text);font-family:"Consolas",monospace;font-size:13px;margin-bottom:10px}
+.drawer input[type=date]{width:100%;padding:10px;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--text);margin-bottom:10px}
+.drawer .day-total{margin:12px 0;padding:12px;text-align:center;background:var(--bg);border-radius:6px;font-family:"Consolas",monospace;font-size:20px;font-weight:700}
+.drawer .fr{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.drawer .fr-item{display:flex;justify-content:space-between;padding:4px 8px;background:var(--bg);border-radius:4px;font-size:12px}
+.drawer .fr-item b{font-family:"Consolas",monospace;color:var(--green)}
+.drawer .actions{margin-top:14px;display:flex;gap:8px;flex-wrap:wrap}
+.fab{position:fixed;bottom:30px;right:30px;width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,var(--cyan),#0099cc);border:none;cursor:pointer;font-size:24px;color:#000;box-shadow:0 0 20px rgba(0,229,255,.5);z-index:50}
+
+/* 粒子背景 */
+.particle-container{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:0.3}
+.particle{position:absolute;width:2px;height:2px;background:var(--cyan);border-radius:50%;animation:float linear infinite}
+@keyframes float{0%{transform:translateY(0) translateX(0);opacity:0}10%{opacity:1}90%{opacity:1}100%{transform:translateY(-100vh) translateX(50px);opacity:0}}
+
+/* 实时时钟 */
+.live-clock{position:fixed;top:10px;left:10px;z-index:1000;font-family:"Consolas",monospace;font-size:14px;color:var(--cyan);background:rgba(10,16,36,0.9);padding:8px 16px;border-radius:4px;border:1px solid var(--line);backdrop-filter:blur(10px)}
+.live-clock .date{font-size:11px;color:var(--text2);margin-top:2px}
+
+/* 预警提示 */
+.alert-badge{position:fixed;top:10px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,var(--red),#cc2244);color:#fff;padding:8px 20px;border-radius:20px;font-size:12px;font-weight:700;z-index:1000;box-shadow:0 0 20px rgba(255,77,109,0.6);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{transform:translateX(-50%) scale(1)}50%{transform:translateX(-50%) scale(1.05)}}
+
+/* 数字滚动动画 */
+@keyframes countUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.kpi-card .val{animation:countUp 0.6s ease-out}
+
+/* 图表加载动画 */
+.chart-loading{display:flex;align-items:center;justify-content:center;height:100%;color:var(--text2);font-size:14px}
+.chart-loading::after{content:"";width:20px;height:20px;margin-left:8px;border:2px solid var(--cyan);border-radius:50%;border-top-color:transparent;animation:spin 0.8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* 全屏控制栏 */
+.fullscreen-controls{position:fixed;top:10px;right:10px;z-index:1000;display:flex;gap:8px}
+.control-btn{background:var(--card);border:1px solid var(--line);color:var(--text);padding:8px 12px;border-radius:4px;cursor:pointer;font-size:12px;backdrop-filter:blur(10px);transition:all .3s}
+.control-btn:hover{border-color:var(--cyan);color:var(--cyan);box-shadow:0 0 10px rgba(0,229,255,.3)}
+.control-btn.active{background:var(--cyan);color:#000;border-color:var(--cyan)}
+
+/* 加载骨架屏 */
+.skeleton{background:linear-gradient(90deg,var(--bg2) 25%,rgba(0,229,255,.05) 50%,var(--bg2) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* 快捷键提示 */
+.shortcut-hint{position:fixed;bottom:10px;left:10px;background:rgba(10,16,36,0.9);border:1px solid var(--line);padding:8px 12px;border-radius:4px;font-size:11px;color:var(--text2);z-index:1000;backdrop-filter:blur(10px);opacity:0;transition:opacity .3s}
+.shortcut-hint.show{opacity:1}
+
+/* 项目详情弹窗 */
+.detail-modal{position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:200;display:none;align-items:center;justify-content:center;backdrop-filter:blur(5px)}
+.detail-modal.show{display:flex}
+.detail-content{background:var(--card);border:2px solid var(--cyan);border-radius:12px;padding:24px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto;animation:modalSlideIn 0.3s ease-out}
+@keyframes modalSlideIn{from{transform:translateY(-50px);opacity:0}to{transform:translateY(0);opacity:1}}
+.detail-content h2{color:var(--cyan);margin-bottom:16px;font-size:20px}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0}
+.detail-item{background:var(--bg);padding:12px;border-radius:6px;border-left:3px solid var(--cyan)}
+.detail-item .label{font-size:11px;color:var(--text2);margin-bottom:4px}
+.detail-item .value{font-size:18px;font-weight:700;font-family:"Consolas",monospace}
+
+/* 项目选择器样式 */
+#projectCheckboxes label:hover{border-color:var(--cyan);background:rgba(0,229,255,.05)}
+#projectCheckboxes input[type="checkbox"]{accent-color:var(--cyan)}
+#projectCheckboxes input[type="checkbox"]:checked + span{color:var(--cyan);font-weight:600}
+
+/* 月度明细表样式 */
+#monthDetailTable table{border-collapse:collapse}
+#monthDetailTable th{position:sticky;top:0;background:var(--bg2);z-index:1;padding:10px 8px;white-space:nowrap}
+#monthDetailTable td{padding:8px;white-space:nowrap;text-align:right}
+#monthDetailTable tr:hover{background:rgba(0,229,255,0.08)}
+#monthDetailTable .btn.active{background:linear-gradient(135deg,var(--cyan),#0099cc);color:#000;font-weight:700}
+
+@media(max-width:1100px){.main{grid-template-columns:1fr}.charts{grid-template-columns:1fr}.charts3{grid-template-columns:1fr}.kpi{grid-template-columns:repeat(3,1fr)}.big-title h1{font-size:28px}}
+@media(max-width:600px){.kpi{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div class="scanline"></div>
+<div class="particle-container" id="particles"></div>
+
+<!-- 实时时钟 -->
+<div class="live-clock">
+  <div id="liveClock" style="font-size:16px;font-weight:700"></div>
+  <div class="date" id="liveDate"></div>
+</div>
+
+<!-- 预警提示（连续亏损时显示） -->
+<div class="alert-badge" id="alertBadge" style="display:none">
+  ⚠️ <span id="alertText"></span>
+</div>
+
+<!-- 全屏控制栏 -->
+<div class="fullscreen-controls">
+  <button class="control-btn" onclick="toggleFullscreen()" title="全屏模式 (F11)">🖥️ 全屏</button>
+  <button class="control-btn" onclick="toggleAutoRefresh()" id="autoRefreshBtn" title="自动刷新 (Ctrl+R)">🔄 刷新</button>
+  <button class="control-btn" onclick="toggleParticles()" id="particleBtn" title="粒子特效">✨ 特效</button>
+  <button class="control-btn" onclick="showShortcuts()" title="快捷键">⌨️</button>
+</div>
+
+<!-- 快捷键提示 -->
+<div class="shortcut-hint" id="shortcutHint">
+  <div style="font-weight:600;margin-bottom:4px;color:var(--cyan)">快捷键</div>
+  <div>F11 - 全屏模式</div>
+  <div>Ctrl+K - 聚焦搜索</div>
+  <div>Ctrl+R - 切换自动刷新</div>
+  <div>Ctrl+E - 导出PDF</div>
+  <div>Esc - 关闭面板</div>
+</div>
+
+<div class="wrap">
+  <div class="big-title">
+    <h1>蛇货战绩数据大屏</h1>
+    <div class="sub">SNAKE BETTING ANALYTICS · 60 DAYS TRACKING</div>
+    <div class="deco"></div>
+  </div>
+
+  <div class="toolbar">
+    <div class="tabs" id="tabs">
+      <button class="tab active" data-m="all">全部</button>
+      <button class="tab" data-m="8">8月</button>
+      <button class="tab" data-m="9">9月</button>
+      <button class="tab" data-m="10">10月</button>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input type="text" id="searchBox" placeholder="搜索项目... (Ctrl+K)" style="padding:8px 12px;border-radius:4px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:12px;width:180px">
+      <button class="btn" onclick="toggleTheme()" title="切换主题">🌙 夜间</button>
+      <button class="btn" onclick="exportData()" title="导出全部JSON数据">💾 全量备份</button>
+      <button class="btn" onclick="document.getElementById('importFile').click()" title="导入JSON">📂 导入</button>
+      <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+      <button class="btn cyan" onclick="openDrawer()" title="录入新数据">+ 录入</button>
+    </div>
+  </div>
+
+  <div class="kpi" id="kpi"></div>
+
+  <div style="background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 16px;margin-bottom:20px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+      <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:center">
+        <div style="font-size:12px;color:var(--text2)">
+          <span>💡 数据洞察：</span>
+          <span id="insight" style="color:var(--cyan);margin-left:4px">加载中...</span>
+        </div>
+        <div style="font-size:12px;color:var(--text2)" id="trendPredict"></div>
+        <div style="font-size:12px;color:var(--text2)">
+          <span>⚠️ 风险等级：</span>
+          <span id="riskLevel" style="font-weight:600;margin-left:4px"></span>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn" onclick="toggleComparison()" style="font-size:11px;padding:6px 12px">📊 对比模式</button>
+        <button class="btn" onclick="exportPDF()" style="font-size:11px;padding:6px 12px">📄 导出PDF</button>
+        <button class="btn" onclick="exportMonthlyData()" style="font-size:11px;padding:6px 12px">📦 导出数据</button>
+      </div>
+    </div>
+    <div style="border-top:1px solid var(--line);padding-top:12px">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <label style="font-size:12px;color:var(--text2)">🎯 自定义统计项目：</label>
+        <button class="btn" onclick="toggleProjectSelector()" style="font-size:11px;padding:6px 12px" id="selectorBtn">
+          <span id="selectedCount">全部18项</span> ▼
+        </button>
+        <button class="btn" onclick="selectAllProjects()" style="font-size:11px;padding:5px 10px">全选</button>
+        <button class="btn" onclick="clearAllProjects()" style="font-size:11px;padding:5px 10px">清空</button>
+        <button class="btn" onclick="selectTopProjects()" style="font-size:11px;padding:5px 10px">仅TOP5</button>
+        <button class="btn" onclick="selectHighPrice()" style="font-size:11px;padding:5px 10px">高价货</button>
+        <button class="btn cyan" onclick="applyProjectFilter()" style="font-size:11px;padding:6px 12px">应用</button>
+      </div>
+      <div id="projectSelector" style="display:none;margin-top:12px;padding:12px;background:var(--bg);border-radius:6px;border:1px solid var(--line)">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px" id="projectCheckboxes"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="comparisonPanel" style="display:none;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:20px">
+    <h3 style="color:var(--cyan);font-size:14px;margin-bottom:12px">📊 项目对比分析</h3>
+    <div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+      <select id="compare1" style="padding:8px;border-radius:4px;border:1px solid var(--line);background:var(--bg);color:var(--text);font-size:12px"></select>
+      <span style="color:var(--text2);line-height:34px">vs</span>
+      <select id="compare2" style="padding:8px;border-radius:4px;border:1px solid var(--line);background:var(--bg);color:var(--text);font-size:12px"></select>
+      <button class="btn cyan" onclick="compareProjects()" style="font-size:12px;padding:6px 16px">开始对比</button>
+    </div>
+    <div id="comparisonResult"></div>
+  </div>
+
+  <div class="main">
+    <div class="panel">
+      <h3>项目净胜排名榜</h3>
+      <div style="overflow-x:auto"><table id="rankTable"></table></div>
+    </div>
+    <div class="panel">
+      <h3>胜负对比</h3>
+      <div id="pieChart" style="height:380px"></div>
+    </div>
+  </div>
+
+  <div class="charts">
+    <div class="panel"><h3>各项目净胜分布</h3><div id="barChart"></div></div>
+    <div class="panel"><h3>TOP5累计净胜走势</h3><div id="trendChart"></div></div>
+  </div>
+
+  <div class="panel" style="margin-bottom:20px">
+    <h3>每日各项目热力图</h3>
+    <div id="heatChart"></div>
+  </div>
+
+  <div class="charts3">
+    <div class="panel"><h3>胜率统计雷达图</h3><div id="radarChart"></div></div>
+    <div class="panel"><h3>投资回报率(ROI)</h3><div id="roiChart"></div></div>
+    <div class="panel"><h3>胜率趋势</h3><div id="winRateChart"></div></div>
+  </div>
+
+  <!-- 月度明细数据表 -->
+  <div class="panel" style="margin-bottom:20px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h3>📅 月度明细数据</h3>
+      <div style="display:flex;gap:8px" id="monthDetailBtns">
+        <button class="btn" onclick="switchMonthDetail('8')" data-month="8" style="font-size:11px;padding:5px 12px">8月</button>
+        <button class="btn" onclick="switchMonthDetail('9')" data-month="9" style="font-size:11px;padding:5px 12px">9月</button>
+        <button class="btn" onclick="switchMonthDetail('10')" data-month="10" style="font-size:11px;padding:5px 12px">10月</button>
+        <button class="btn" onclick="exportMonthDetailCSV()" style="font-size:11px;padding:5px 12px">📊 导出CSV</button>
+      </div>
+    </div>
+    <div id="monthDetailTable" style="overflow-x:auto;max-height:600px;overflow-y:auto"></div>
+  </div>
+</div>
+
+<!-- 项目详情弹窗 -->
+<div class="detail-modal" id="detailModal" onclick="closeDetailModal(event)">
+  <div class="detail-content" onclick="event.stopPropagation()">
+    <button class="close" onclick="closeDetailModal()" style="position:absolute;top:16px;right:16px">×</button>
+    <h2 id="detailTitle"></h2>
+    <div class="detail-grid" id="detailGrid"></div>
+    <div id="detailChart" style="height:250px;margin-top:16px"></div>
+  </div>
+</div>
+
+<button class="fab" onclick="openDrawer()">+</button>
+<div class="drawer" id="drawer">
+  <button class="close" onclick="closeDrawer()">×</button>
+  <h3>录入当日数据</h3>
+  <input type="date" id="inputDate">
+  <textarea id="pasteBox" placeholder="粘贴备忘录文本，如：老尾+1 新尾+1..."></textarea>
+  <div style="display:flex;gap:8px;margin-bottom:10px">
+    <button class="btn cyan" onclick="parsePaste()">识别填入</button>
+    <button class="btn" onclick="todayDate()">今天</button>
+  </div>
+  <div class="day-total" id="dayTotal">当日总分：0</div>
+  <div class="fr" id="fields"></div>
+  <div class="actions">
+    <button class="btn cyan" onclick="saveDay()">保存更新</button>
+    <button class="btn" onclick="resetForm()">清空</button>
+  </div>
+</div>
+
+<script>
+const PROJECTS=["老尾","新尾","木同","香港","金沙","轻蛇","马来","绿水","ααα","球员","裁判","土狗","彩虹","大","小","篮","东欧","猪头"];
+const PRICE={"老尾":888,"新尾":888,"木同":433,"香港":498,"金沙":488,"轻蛇":466,"马来":0,"绿水":388,"ααα":377,"球员":365,"裁判":306,"土狗":288,"彩虹":268,"大":188,"小":188,"篮":100,"东欧":100,"猪头":399};
+const BUILTIN={
+"8.13":{"老尾":1,"新尾":1,"木同":-1,"香港":0.5,"金沙":0,"轻蛇":3,"马来":-1.5,"绿水":0,"ααα":-1,"球员":-1,"裁判":0,"土狗":1.5,"彩虹":1,"大":3,"小":1,"篮":2,"东欧":-1,"猪头":0.5},
+"8.14":{"老尾":1,"新尾":1,"木同":-1,"香港":-3,"金沙":2.5,"轻蛇":3,"马来":-1.5,"绿水":1,"ααα":-1,"球员":3,"裁判":-2.5,"土狗":1,"彩虹":-3,"大":1,"小":1.5,"篮":1,"东欧":-1.5,"猪头":0},
+"8.15":{"老尾":1,"新尾":0,"木同":2,"香港":-2.5,"金沙":1,"轻蛇":1,"马来":-5,"绿水":1,"ααα":-1.5,"球员":1,"裁判":-1,"土狗":0,"彩虹":-1,"大":3,"小":1.5,"篮":3,"东欧":-2,"猪头":1},
+"8.16":{"老尾":1,"新尾":1,"木同":-1,"香港":-1,"金沙":3,"轻蛇":0,"马来":-1,"绿水":3,"ααα":-1,"球员":3,"裁判":0.5,"土狗":1.5,"彩虹":-1.5,"大":3,"小":1.5,"篮":3,"东欧":-2,"猪头":1},
+"8.18":{"老尾":1,"新尾":1,"木同":1,"香港":3,"金沙":2,"轻蛇":1,"马来":-1,"绿水":1,"ααα":-1,"球员":3,"裁判":0,"土狗":1.5,"彩虹":-1.5,"大":3,"小":-1,"篮":1,"东欧":-1,"猪头":1},
+"8.19":{"老尾":1,"新尾":0.5,"木同":3,"香港":1,"金沙":3,"轻蛇":1,"马来":-1.5,"绿水":3,"ααα":-1.5,"球员":1,"裁判":0.5,"土狗":1,"彩虹":-3,"大":1,"小":-1,"篮":3,"东欧":-3,"猪头":2.5},
+"8.20":{"老尾":0,"新尾":1,"木同":-2.5,"香港":3,"金沙":1,"轻蛇":0,"马来":-1,"绿水":1,"ααα":-1,"球员":1,"裁判":1,"土狗":1.5,"彩虹":-1,"大":0,"小":-1.5,"篮":1,"东欧":-1,"猪头":0},
+"8.21":{"老尾":1,"新尾":1,"木同":-1,"香港":-0.5,"金沙":3,"轻蛇":2.5,"马来":-3,"绿水":3,"ααα":-1.5,"球员":3,"裁判":1,"土狗":1,"彩虹":1,"大":-1,"小":-1,"篮":1,"东欧":-1.5,"猪头":2},
+"8.22":{"老尾":1,"新尾":0,"木同":-1.5,"香港":3,"金沙":0,"轻蛇":-1,"马来":-1,"绿水":1,"ααα":-1,"球员":1,"裁判":3,"土狗":2.5,"彩虹":1.5,"大":1,"小":-1.5,"篮":3,"东欧":-4.5,"猪头":1},
+"8.23":{"老尾":1,"新尾":1,"木同":0,"香港":-1,"金沙":3,"轻蛇":2.5,"马来":-1.5,"绿水":0,"ααα":-1,"球员":1,"裁判":1,"土狗":-3,"彩虹":1,"大":1,"小":-1,"篮":-1,"东欧":-1,"猪头":3},
+"8.24":{"老尾":0.5,"新尾":1,"木同":3,"香港":-3,"金沙":1,"轻蛇":1.5,"马来":-1,"绿水":1.5,"ααα":-3,"球员":3,"裁判":1.5,"土狗":-1,"彩虹":0,"大":-1.5,"小":-1.5,"篮":3,"东欧":-1.5,"猪头":1},
+"8.25":{"老尾":0.5,"新尾":1,"木同":1,"香港":-1,"金沙":3,"轻蛇":1,"马来":-1.5,"绿水":1,"ααα":-1,"球员":1,"裁判":3,"土狗":-1.5,"彩虹":1,"大":3,"小":-1,"篮":1,"东欧":-1,"猪头":0},
+"8.27":{"老尾":0,"新尾":1,"木同":1.5,"香港":1,"金沙":3,"轻蛇":1,"马来":-1,"绿水":1,"ααα":-1,"球员":0,"裁判":-0.5,"土狗":-3,"彩虹":3,"大":-1,"小":-1.5,"篮":1,"东欧":-3,"猪头":0},
+"8.28":{"老尾":1,"新尾":1,"木同":1,"香港":-1,"金沙":0,"轻蛇":2.5,"马来":-3,"绿水":0,"ααα":1,"球员":3,"裁判":2,"土狗":-1,"彩虹":-1,"大":3,"小":0.5,"篮":1,"东欧":-2.5,"猪头":1},
+"8.30":{"老尾":0,"新尾":1,"木同":3,"香港":3,"金沙":-1,"轻蛇":0.5,"马来":-1.5,"绿水":1,"ααα":2.5,"球员":1,"裁判":3,"土狗":-1.5,"彩虹":-3,"大":0,"小":-1,"篮":1,"东欧":-1,"猪头":1.5},
+"9.1":{"老尾":1,"新尾":0,"木同":1,"香港":0.5,"金沙":3,"轻蛇":0,"马来":-1,"绿水":0,"ααα":1,"球员":1.5,"裁判":-1,"土狗":-1,"彩虹":3,"大":3,"小":-1,"篮":1,"东欧":-1.5,"猪头":1},
+"9.2":{"老尾":1,"新尾":1,"木同":0,"香港":-3,"金沙":1,"轻蛇":2.5,"马来":-3,"绿水":0.5,"ααα":1.5,"球员":1,"裁判":3,"土狗":-1.5,"彩虹":1,"大":1,"小":-1.5,"篮":3,"东欧":-4.5,"猪头":3},
+"9.3":{"老尾":0.5,"新尾":1,"木同":1,"香港":0.5,"金沙":3,"轻蛇":0,"马来":-1,"绿水":0,"ααα":3,"球员":2.5,"裁判":1,"土狗":2,"彩虹":0.5,"大":3,"小":0,"篮":-1,"东欧":-1,"猪头":0.5},
+"9.4":{"老尾":1,"新尾":1,"木同":0,"香港":0.5,"金沙":1,"轻蛇":-1,"马来":-1,"绿水":0.5,"ααα":1,"球员":0,"裁判":-1,"土狗":-1,"彩虹":1.5,"大":-3,"小":2.5,"篮":-1,"东欧":-1.5,"猪头":0},
+"9.5":{"老尾":0.5,"新尾":1,"木同":3,"香港":-1,"金沙":3,"轻蛇":-1.5,"马来":-3,"绿水":1,"ααα":1,"球员":3,"裁判":2.5,"土狗":-1.5,"彩虹":1,"大":-1,"小":1,"篮":1,"东欧":-1,"猪头":1.5},
+"9.6":{"老尾":1,"新尾":0,"木同":0.5,"香港":1,"金沙":1,"轻蛇":-1,"马来":0,"绿水":3,"ααα":2.5,"球员":1,"裁判":1,"土狗":0,"彩虹":-2,"大":2,"小":-1,"篮":1,"东欧":-1.5,"猪头":1},
+"9.8":{"老尾":1,"新尾":0.5,"木同":1,"香港":2,"金沙":1,"轻蛇":0,"马来":-1,"绿水":1,"ααα":3,"球员":1,"裁判":1,"土狗":0,"彩虹":-1.5,"大":3,"小":-1,"篮":1,"东欧":-1.5,"猪头":-1},
+"9.9":{"老尾":1,"新尾":0,"木同":3,"香港":1.5,"金沙":2.5,"轻蛇":1,"马来":-1.5,"绿水":3,"ααα":1,"球员":1,"裁判":1.5,"土狗":-2.5,"彩虹":-1,"大":1,"小":3,"篮":-1,"东欧":-1,"猪头":-1.5},
+"9.10":{"老尾":0.5,"新尾":-1,"木同":1,"香港":1,"金沙":3,"轻蛇":2.5,"马来":-1,"绿水":-1,"ααα":0.5,"球员":0,"裁判":3,"土狗":-1,"彩虹":-1.5,"大":3,"小":0,"篮":-3,"东欧":-1.5,"猪头":3},
+"9.11":{"老尾":0,"新尾":1,"木同":-3,"香港":-1,"金沙":1,"轻蛇":1.5,"马来":3,"绿水":2.5,"ααα":0,"球员":1,"裁判":2,"土狗":-1.5,"彩虹":-1,"大":1,"小":1,"篮":3,"东欧":-1,"猪头":1},
+"9.12":{"老尾":1,"新尾":1,"木同":0,"香港":1,"金沙":1.5,"轻蛇":1,"马来":-2.5,"绿水":3,"ααα":1,"球员":1,"裁判":3,"土狗":0,"彩虹":-1.5,"大":-1,"小":3,"篮":1,"东欧":-2.5,"猪头":3},
+"9.13":{"老尾":1,"新尾":1,"木同":0.5,"香港":-1,"金沙":2,"轻蛇":0,"马来":-1,"绿水":1,"ααα":1.5,"球员":3,"裁判":1,"土狗":-2.5,"彩虹":-1,"大":3,"小":1,"篮":1,"东欧":-1,"猪头":0},
+"9.14":{"老尾":0,"新尾":1,"木同":2.5,"香港":-0.5,"金沙":1.5,"轻蛇":3,"马来":-1.5,"绿水":3,"ααα":1,"球员":1,"裁判":0.5,"土狗":-1,"彩虹":-1.5,"大":1,"小":1,"篮":3,"东欧":-5,"猪头":1},
+"9.15":{"老尾":1,"新尾":0,"木同":3,"香港":0,"金沙":3,"轻蛇":1,"马来":-3,"绿水":-2,"ααα":1,"球员":1,"裁判":3,"土狗":-1,"彩虹":1,"大":3,"小":-1,"篮":1,"东欧":-1,"猪头":1},
+"9.16":{"老尾":1,"新尾":-0.5,"木同":0,"香港":-1,"金沙":2.5,"轻蛇":2,"马来":-1,"绿水":-1,"ααα":3,"球员":2,"裁判":3,"土狗":-1,"彩虹":0,"大":3,"小":2.5,"篮":1,"东欧":-0.5,"猪头":3},
+"9.17":{"老尾":1,"新尾":1,"木同":-1,"香港":1,"金沙":0.5,"轻蛇":3,"马来":-1,"绿水":-1,"ααα":3,"球员":1,"裁判":2,"土狗":-1.5,"彩虹":1.5,"大":0,"小":-1,"篮":1,"东欧":-3,"猪头":0},
+"9.18":{"老尾":1,"新尾":1,"木同":-1.5,"香港":0,"金沙":1,"轻蛇":-2.5,"马来":-3,"绿水":3,"ααα":0.5,"球员":1.5,"裁判":1,"土狗":-1,"彩虹":1,"大":1.5,"小":-1,"篮":-1,"东欧":-1,"猪头":-0.5},
+"9.19":{"老尾":1,"新尾":1,"木同":3,"香港":-1,"金沙":2,"轻蛇":-1,"马来":-1,"绿水":0,"ααα":1,"球员":1,"裁判":3,"土狗":-1.5,"彩虹":0,"大":-1,"小":-1.5,"篮":3,"东欧":-1.5,"猪头":-1},
+"9.20":{"老尾":1,"新尾":1,"木同":0,"香港":1,"金沙":0.5,"轻蛇":-1.5,"马来":-3,"绿水":3,"ααα":0.5,"球员":-1,"裁判":1.5,"土狗":-1,"彩虹":0.5,"大":3,"小":1,"篮":1,"东欧":3,"猪头":3},
+"9.21":{"老尾":0,"新尾":1,"木同":1,"香港":0.5,"金沙":-1,"轻蛇":2.5,"马来":-1,"绿水":1,"ααα":0,"球员":3,"裁判":2.5,"土狗":-3,"彩虹":0,"大":1,"小":1,"篮":3,"东欧":1,"猪头":1},
+"9.22":{"老尾":1,"新尾":1,"木同":3,"香港":3,"金沙":0,"轻蛇":-1,"马来":-1,"绿水":2.5,"ααα":1,"球员":1,"裁判":0,"土狗":-1,"彩虹":-3,"大":3,"小":1,"篮":1,"东欧":-4.5,"猪头":1},
+"9.23":{"老尾":0.5,"新尾":0,"木同":1,"香港":-1,"金沙":3,"轻蛇":3,"马来":-1.5,"绿水":0,"ααα":-1,"球员":0.5,"裁判":3,"土狗":-1.5,"彩虹":-1,"大":1,"小":1,"篮":1,"东欧":-1,"猪头":2.5},
+"9.24":{"老尾":0.5,"新尾":1,"木同":1.5,"香港":0.5,"金沙":1,"轻蛇":1,"马来":-1,"绿水":3,"ααα":-1.5,"球员":-1,"裁判":1.5,"土狗":-3,"彩虹":-1.5,"大":3,"小":3,"篮":1,"东欧":-5,"猪头":0.5},
+"9.26":{"老尾":1,"新尾":1,"木同":1,"香港":-1,"金沙":3,"轻蛇":1.5,"马来":-3,"绿水":1,"ααα":-1,"球员":-1.5,"裁判":1,"土狗":-1,"彩虹":-1,"大":1,"小":2.5,"篮":1,"东欧":-1,"猪头":3},
+"9.27":{"老尾":0,"新尾":0.5,"木同":3,"香港":1,"金沙":1,"轻蛇":3,"马来":-1,"绿水":3,"ααα":-1,"球员":3,"裁判":2,"土狗":-3,"彩虹":-1.5,"大":1.5,"小":-1,"篮":1,"东欧":-1.5,"猪头":1},
+"9.29":{"老尾":1,"新尾":0,"木同":-1,"香港":-1,"金沙":3,"轻蛇":1,"马来":0,"绿水":0,"ααα":1,"球员":3,"裁判":0,"土狗":-1.5,"彩虹":-1,"大":-1,"小":-2.5,"篮":1,"东欧":-1,"猪头":1},
+"9.30":{"老尾":0,"新尾":1,"木同":1,"香港":-1,"金沙":0.5,"轻蛇":3,"马来":-1,"绿水":3,"ααα":1.5,"球员":1,"裁判":-1,"土狗":-2.5,"彩虹":3,"大":1,"小":2,"篮":3,"东欧":-1.5,"猪头":2},
+"10.1":{"老尾":1,"新尾":1,"木同":3,"香港":1.5,"金沙":1,"轻蛇":1,"马来":-2.5,"绿水":0,"ααα":-3,"球员":1.5,"裁判":2,"土狗":-1,"彩虹":-1,"大":0.5,"小":1,"篮":-1,"东欧":-1,"猪头":3},
+"10.2":{"老尾":1,"新尾":0.5,"木同":1,"香港":0.5,"金沙":1.5,"轻蛇":3,"马来":-1,"绿水":3,"ααα":-1,"球员":1,"裁判":1,"土狗":-1.5,"彩虹":0,"大":-1,"小":3,"篮":3,"东欧":-1.5,"猪头":1},
+"10.3":{"老尾":1,"新尾":1,"木同":3,"香港":-1,"金沙":3,"轻蛇":2.5,"马来":-3,"绿水":1,"ααα":1,"球员":3,"裁判":1.5,"土狗":-1,"彩虹":-3,"大":2.5,"小":1,"篮":-3,"东欧":-3,"猪头":2},
+"10.4":{"老尾":0.5,"新尾":0,"木同":1,"香港":3,"金沙":1,"轻蛇":0.5,"马来":-1,"绿水":1,"ααα":2.5,"球员":1,"裁判":1,"土狗":-1.5,"彩虹":-1,"大":0,"小":1,"篮":-3,"东欧":-1,"猪头":3},
+"10.5":{"老尾":1,"新尾":1,"木同":2.5,"香港":1,"金沙":1.5,"轻蛇":0,"马来":-3,"绿水":3,"ααα":0,"球员":0,"裁判":3,"土狗":-1,"彩虹":-1.5,"大":3,"小":1,"篮":-3,"东欧":-3.5,"猪头":1},
+"10.7":{"老尾":0,"新尾":1,"木同":3,"香港":0.5,"金沙":1.5,"轻蛇":1,"马来":-3,"绿水":-1,"ααα":1,"球员":3,"裁判":1.5,"土狗":-2.5,"彩虹":-2,"大":3,"小":1,"篮":-1,"东欧":-1.5,"猪头":0},
+"10.8":{"老尾":1,"新尾":-1,"木同":-1,"香港":3,"金沙":2,"轻蛇":2,"马来":-1,"绿水":-3,"ααα":2.5,"球员":1,"裁判":1,"土狗":0,"彩虹":1,"大":3,"小":-1,"篮":1,"东欧":-5,"猪头":3},
+"10.9":{"老尾":1,"新尾":1,"木同":0,"香港":1,"金沙":1,"轻蛇":3,"马来":-3.5,"绿水":-1,"ααα":0,"球员":-1,"裁判":3,"土狗":1,"彩虹":-1,"大":1,"小":-1,"篮":1,"东欧":-1,"猪头":1},
+"10.10":{"老尾":1,"新尾":1,"木同":1,"香港":-1.5,"金沙":3,"轻蛇":1,"马来":-3,"绿水":-1,"ααα":0.5,"球员":0,"裁判":1,"土狗":1,"彩虹":-1.5,"大":1,"小":-0.5,"篮":-1,"东欧":-1,"猪头":0},
+"10.11":{"老尾":-0.5,"新尾":1,"木同":3,"香港":1,"金沙":-2,"轻蛇":0.5,"马来":-1,"绿水":2.5,"ααα":0,"球员":1,"裁判":3,"土狗":0,"彩虹":-2.5,"大":2,"小":1,"篮":3,"东欧":-1.5,"猪头":1},
+"10.12":{"老尾":0,"新尾":-1,"木同":1,"香港":3,"金沙":-1.5,"轻蛇":0,"马来":1,"绿水":0.5,"ααα":2.5,"球员":1,"裁判":2,"土狗":3,"彩虹":-1.5,"大":3,"小":1,"篮":1,"东欧":-5,"猪头":1},
+"10.13":{"老尾":1,"新尾":0.5,"木同":-3,"香港":1,"金沙":2.5,"轻蛇":1,"马来":-3.5,"绿水":0,"ααα":1,"球员":1.5,"裁判":3,"土狗":1,"彩虹":-1,"大":0,"小":1.5,"篮":1,"东欧":-1,"猪头":2.5},
+"10.14":{"老尾":-1,"新尾":1,"木同":-1,"香港":2.5,"金沙":1,"轻蛇":1.5,"马来":-2,"绿水":3,"ααα":-1,"球员":1,"裁判":3,"土狗":0,"彩虹":-3,"大":2,"小":1,"篮":1,"东欧":-1,"猪头":2},
+"10.15":{"老尾":0,"新尾":1,"木同":-1,"香港":1,"金沙":1,"轻蛇":-1.5,"马来":-3,"绿水":0,"ααα":-1.5,"球员":3,"裁判":-1,"土狗":1,"彩虹":-2.5,"大":1,"小":1,"篮":-1,"东欧":-3.5,"猪头":1},
+"10.16":{"老尾":1,"新尾":0,"木同":3,"香港":0.5,"金沙":2,"轻蛇":0,"马来":0,"绿水":1,"ααα":-3,"球员":-1,"裁判":1.5,"土狗":0.5,"彩虹":-1,"大":3,"小":1,"篮":1,"东欧":-1,"猪头":3},
+"10.17":{"老尾":1,"新尾":1,"木同":0,"香港":1,"金沙":2,"轻蛇":1,"马来":-4,"绿水":1,"ααα":-1,"球员":3,"裁判":0.5,"土狗":0,"彩虹":-3,"大":1,"小":1,"篮":-1,"东欧":-1.5,"猪头":3},
+"10.18":{"老尾":0,"新尾":1,"木同":1.5,"香港":3,"金沙":3,"轻蛇":0,"马来":-1,"绿水":0,"ααα":2.5,"球员":1,"裁判":-1,"土狗":1,"彩虹":-1,"大":2.5,"小":1,"篮":3,"东欧":-4,"猪头":-1.5},
+"10.19":{"老尾":0.5,"新尾":1,"木同":1,"香港":2.5,"金沙":3,"轻蛇":1,"马来":-1.5,"绿水":1,"ααα":0,"球员":1,"裁判":-1,"土狗":1,"彩虹":-1.5,"大":1,"小":3,"篮":1,"东欧":-1.5,"猪头":0},
+"10.20":{"老尾":1,"新尾":1,"木同":0.5,"香港":1,"金沙":-2.5,"轻蛇":3,"马来":-2,"绿水":0,"ααα":3,"球员":1,"裁判":-0.5,"土狗":2,"彩虹":-3,"大":1.5,"小":2,"篮":1,"东欧":0,"猪头":-1}
+};
+
+let DATA=JSON.parse(localStorage.getItem('snakeData')||'null')||JSON.parse(JSON.stringify(BUILTIN));
+let month='all';let formVals={};
+let searchTerm='';let isDarkMode=true;let comparisonMode=false;
+let selectedProjects=[...PROJECTS]; // 默认选中所有项目
+let selectorOpen=false;
+let autoRefreshInterval=null;
+let isAutoRefresh=false;
+const chartCache=new Map(); // 图表缓存
+let particlesEnabled=true;
+let clockInterval=null;
+
+// 数据处理工具函数
+function getDays(m){return Object.keys(DATA).filter(d=>m==='all'||d.startsWith(m)).sort((a,b)=>{const[am,ad]=a.split('.').map(Number);const[bm,bd]=b.split('.').map(Number);return am!==bm?am-bm:ad-bd})}
+function calc(name,days){let net=0,w=0,l=0;for(const d of days){const v=DATA[d][name]||0;net+=v;if(v>0)w++;else if(v<0)l++}return{net,w,l,n:days.length}}
+function fmt(v){return(v>0?'+':'')+v.toFixed(1)}
+
+// 实时时钟
+function updateLiveClock(){
+  const now=new Date();
+  const time=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+':'+String(now.getSeconds()).padStart(2,'0');
+  const date=now.getFullYear()+'/'+(now.getMonth()+1)+'/'+now.getDate()+' 星期'+'日一二三四五六'.charAt(now.getDay());
+  document.getElementById('liveClock').textContent=time;
+  document.getElementById('liveDate').textContent=date;
+}
+
+// 粒子特效
+function initParticles(){
+  const container=document.getElementById('particles');
+  container.innerHTML='';
+
+  if(!particlesEnabled)return;
+
+  for(let i=0;i<30;i++){
+    const particle=document.createElement('div');
+    particle.className='particle';
+    particle.style.left=Math.random()*100+'%';
+    particle.style.animationDuration=(Math.random()*10+10)+'s';
+    particle.style.animationDelay=Math.random()*5+'s';
+    particle.style.opacity=Math.random()*0.5+0.3;
+    container.appendChild(particle);
+  }
+}
+
+function toggleParticles(){
+  particlesEnabled=!particlesEnabled;
+  const btn=document.getElementById('particleBtn');
+
+  if(particlesEnabled){
+    btn.classList.add('active');
+    initParticles();
+  }else{
+    btn.classList.remove('active');
+    document.getElementById('particles').innerHTML='';
+  }
+}
+
+// 预警系统
+function checkAlert(dailyTotals){
+  const alertBadge=document.getElementById('alertBadge');
+  const alertText=document.getElementById('alertText');
+
+  // 检查最近3天连续亏损
+  const recent3=dailyTotals.slice(-3);
+  if(recent3.length===3 && recent3.every(v=>v<0)){
+    alertText.textContent='连续3天亏损！请谨慎操作';
+    alertBadge.style.display='block';
+    return;
+  }
+
+  // 检查今日大额亏损
+  const today=dailyTotals[dailyTotals.length-1];
+  if(today<-10){
+    alertText.textContent='今日亏损超过10分！';
+    alertBadge.style.display='block';
+    return;
+  }
+
+  alertBadge.style.display='none';
+}
+
+// 趋势预测（简单线性回归）
+function predictTrend(days,stats){
+  if(days.length<7)return null;
+
+  const recent7Days=days.slice(-7);
+  const dailyTotals=recent7Days.map(d=>selectedProjects.reduce((s,p)=>s+(DATA[d][p]||0),0));
+
+  // 计算斜率
+  const n=dailyTotals.length;
+  const xSum=dailyTotals.reduce((s,_,i)=>s+i,0);
+  const ySum=dailyTotals.reduce((s,v)=>s+v,0);
+  const xySum=dailyTotals.reduce((s,v,i)=>s+i*v,0);
+  const x2Sum=dailyTotals.reduce((s,_,i)=>s+i*i,0);
+
+  const slope=(n*xySum-xSum*ySum)/(n*x2Sum-xSum*xSum);
+
+  if(slope>0.5)return'📈 上升趋势';
+  if(slope<-0.5)return'📉 下降趋势';
+  return'➡️ 平稳趋势';
+}
+
+// 风险评估
+function assessRisk(stats,days){
+  const dailyTotals=days.map(d=>selectedProjects.reduce((s,p)=>s+(DATA[d][p]||0),0));
+  const avg=dailyTotals.reduce((s,v)=>s+v,0)/days.length;
+  const variance=dailyTotals.reduce((s,v)=>s+Math.pow(v-avg,2),0)/days.length;
+  const volatility=Math.sqrt(variance);
+
+  if(volatility>5)return{level:'高',color:'var(--red)',text:'波动较大，风险较高'};
+  if(volatility>2)return{level:'中',color:'var(--yellow)',text:'波动适中，注意控制'};
+  return{level:'低',color:'var(--green)',text:'波动较小，风险可控'};
+}
+
+// 主题切换
+function toggleTheme(){
+  isDarkMode=!isDarkMode;
+  const root=document.documentElement;
+  if(!isDarkMode){
+    root.style.setProperty('--bg','#f5f7fa');
+    root.style.setProperty('--bg2','#e8ecf1');
+    root.style.setProperty('--card','rgba(255,255,255,0.9)');
+    root.style.setProperty('--text','#2c3e50');
+    root.style.setProperty('--text2','#7f8c8d');
+    document.querySelector('.btn[onclick="toggleTheme()"]').textContent='☀️ 日间';
+  }else{
+    root.style.setProperty('--bg','#020510');
+    root.style.setProperty('--bg2','#0a1024');
+    root.style.setProperty('--card','rgba(15,25,50,.7)');
+    root.style.setProperty('--text','#dce8ff');
+    root.style.setProperty('--text2','#5a7099');
+    document.querySelector('.btn[onclick="toggleTheme()"]').textContent='🌙 夜间';
+  }
+  render();
+}
+
+// 搜索功能
+document.addEventListener('DOMContentLoaded',()=>{
+  // 防抖搜索
+  const debouncedSearch=debounce(value=>{
+    searchTerm=value.toLowerCase();
+    render();
+  },300);
+
+  document.getElementById('searchBox').addEventListener('input',e=>{
+    debouncedSearch(e.target.value);
+  });
+
+  // 初始化对比下拉框
+  const sel1=document.getElementById('compare1');
+  const sel2=document.getElementById('compare2');
+  PROJECTS.forEach(p=>{
+    sel1.innerHTML+=`<option value="${p}">${p}</option>`;
+    sel2.innerHTML+=`<option value="${p}">${p}</option>`;
+  });
+  sel2.selectedIndex=1;
+
+  // 初始化项目选择器
+  initProjectSelector();
+
+  // 启动实时时钟
+  updateLiveClock();
+  clockInterval=setInterval(updateLiveClock,1000);
+
+  // 初始化粒子特效
+  initParticles();
+
+  // 显示加载完成提示
+  showNotification('🎉 数据大屏加载完成！',1500);
+});
+
+// 初始化项目选择器
+function initProjectSelector(){
+  const container=document.getElementById('projectCheckboxes');
+  container.innerHTML=PROJECTS.map(p=>`
+    <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px;color:var(--text);padding:4px 8px;background:var(--card);border-radius:4px;border:1px solid var(--line);transition:all .2s">
+      <input type="checkbox" value="${p}" checked onchange="updateProjectSelection()" style="cursor:pointer">
+      <span>${p}</span>
+    </label>
+  `).join('');
+  updateSelectedCount();
+}
+
+// 切换项目选择器显示
+function toggleProjectSelector(){
+  selectorOpen=!selectorOpen;
+  document.getElementById('projectSelector').style.display=selectorOpen?'block':'none';
+  document.getElementById('selectorBtn').innerHTML=`<span id="selectedCount">${selectedProjects.length}/${PROJECTS.length}项</span> ${selectorOpen?'▲':'▼'}`;
+}
+
+// 更新项目选择
+function updateProjectSelection(){
+  const checkboxes=document.querySelectorAll('#projectCheckboxes input[type="checkbox"]');
+  selectedProjects=Array.from(checkboxes).filter(cb=>cb.checked).map(cb=>cb.value);
+  updateSelectedCount();
+}
+
+// 更新选中计数
+function updateSelectedCount(){
+  const count=selectedProjects.length;
+  const label=count===PROJECTS.length?`全部${count}项`:count===0?'未选择':`已选${count}项`;
+  document.getElementById('selectedCount').textContent=label;
+}
+
+// 全选项目
+function selectAllProjects(){
+  document.querySelectorAll('#projectCheckboxes input[type="checkbox"]').forEach(cb=>cb.checked=true);
+  updateProjectSelection();
+}
+
+// 清空选择
+function clearAllProjects(){
+  document.querySelectorAll('#projectCheckboxes input[type="checkbox"]').forEach(cb=>cb.checked=false);
+  updateProjectSelection();
+}
+
+// 快速选择：仅TOP5
+function selectTopProjects(){
+  const days=getDays(month);
+  const stats=PROJECTS.map(p=>({name:p,...calc(p,days)})).sort((a,b)=>b.net-a.net);
+  const top5=stats.slice(0,5).map(s=>s.name);
+  document.querySelectorAll('#projectCheckboxes input[type="checkbox"]').forEach(cb=>{
+    cb.checked=top5.includes(cb.value);
+  });
+  updateProjectSelection();
+}
+
+// 快速选择：高价货（货价>=400）
+function selectHighPrice(){
+  document.querySelectorAll('#projectCheckboxes input[type="checkbox"]').forEach(cb=>{
+    cb.checked=PRICE[cb.value]&&PRICE[cb.value]>=400;
+  });
+  updateProjectSelection();
+}
+
+// 应用项目筛选
+function applyProjectFilter(){
+  if(selectedProjects.length===0){
+    alert('请至少选择一个项目！');
+    return;
+  }
+  render();
+  if(selectorOpen)toggleProjectSelector();
+}
+
+// 对比模式切换
+function toggleComparison(){
+  comparisonMode=!comparisonMode;
+  document.getElementById('comparisonPanel').style.display=comparisonMode?'block':'none';
+}
+
+// 项目对比
+function compareProjects(){
+  const p1=document.getElementById('compare1').value;
+  const p2=document.getElementById('compare2').value;
+  const days=getDays(month);
+  const s1=calc(p1,days);
+  const s2=calc(p2,days);
+  const roi1=PRICE[p1]?(s1.net*500/PRICE[p1]*100).toFixed(1):0;
+  const roi2=PRICE[p2]?(s2.net*500/PRICE[p2]*100).toFixed(1):0;
+  const wr1=(s1.w/(s1.w+s1.l)*100).toFixed(1);
+  const wr2=(s2.w/(s2.w+s2.l)*100).toFixed(1);
+
+  document.getElementById('comparisonResult').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px">
+      <div style="background:var(--bg);border-radius:6px;padding:12px">
+        <h4 style="color:var(--cyan);font-size:13px;margin-bottom:8px">${p1}</h4>
+        <div style="font-size:11px;color:var(--text2);line-height:1.8">
+          净胜分：<b style="color:${s1.net>=0?'var(--green)':'var(--red)'}"> ${fmt(s1.net)}</b><br/>
+          胜率：<b style="color:var(--yellow)">${wr1}%</b> (${s1.w}胜${s1.l}负)<br/>
+          场均：<b>${(s1.net/s1.n).toFixed(2)}</b><br/>
+          ROI：<b style="color:${roi1>=0?'var(--green)':'var(--red)'}"> ${roi1}%</b><br/>
+          货价：<b>${PRICE[p1]||'—'}</b>
+        </div>
+      </div>
+      <div style="background:var(--bg);border-radius:6px;padding:12px">
+        <h4 style="color:var(--cyan);font-size:13px;margin-bottom:8px">${p2}</h4>
+        <div style="font-size:11px;color:var(--text2);line-height:1.8">
+          净胜分：<b style="color:${s2.net>=0?'var(--green)':'var(--red)'}"> ${fmt(s2.net)}</b><br/>
+          胜率：<b style="color:var(--yellow)">${wr2}%</b> (${s2.w}胜${s2.l}负)<br/>
+          场均：<b>${(s2.net/s2.n).toFixed(2)}</b><br/>
+          ROI：<b style="color:${roi2>=0?'var(--green)':'var(--red)'}"> ${roi2}%</b><br/>
+          货价：<b>${PRICE[p2]||'—'}</b>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:12px;padding:10px;background:var(--bg);border-radius:6px;border-left:3px solid var(--cyan)">
+      <b style="color:var(--cyan);font-size:12px">对比结论：</b>
+      <span style="font-size:11px;color:var(--text2);margin-left:8px">
+        ${s1.net>s2.net?p1:p2} 净胜更高 |
+        ${parseFloat(wr1)>parseFloat(wr2)?p1:p2} 胜率更好 |
+        ${parseFloat(roi1)>parseFloat(roi2)?p1:p2} ROI更优
+      </span>
+    </div>
+  `;
+}
+
+// 智能洞察
+function generateInsight(stats,days,dailyTotals){
+  const total=stats.reduce((s,x)=>s+x.net,0);
+  const bestDay=Math.max(...dailyTotals);
+  const worstDay=Math.min(...dailyTotals);
+  const winDays=dailyTotals.filter(v=>v>0).length;
+
+  // 连胜分析
+  let maxStreak=0,curStreak=0;
+  dailyTotals.forEach(v=>{if(v>0){curStreak++; maxStreak=Math.max(maxStreak,curStreak)}else curStreak=0});
+
+  // 波动率
+  const avg=total/days.length;
+  const variance=dailyTotals.reduce((s,v)=>s+Math.pow(v-avg,2),0)/days.length;
+  const volatility=Math.sqrt(variance).toFixed(2);
+
+  const projectInfo=selectedProjects.length===PROJECTS.length?'全部项目':selectedProjects.length<=3?selectedProjects.join('、'):`${selectedProjects.length}个项目`;
+
+  const insights=[
+    `${projectInfo}总盈利${fmt(total)}，日均${avg.toFixed(1)}分`,
+    `${projectInfo}最长连胜${maxStreak}天`,
+    `${projectInfo}日波动率${volatility}`,
+    `${projectInfo}最佳单日${fmt(bestDay)}`
+  ];
+  return insights[Math.floor(Math.random()*insights.length)];
+}
+
+// PDF导出（真实PDF生成）
+function exportPDF(){
+  const btn=event.target;
+  btn.textContent='生成中...';
+  btn.disabled=true;
+
+  // 检查库是否加载
+  if(typeof html2canvas==='undefined' || typeof jspdf==='undefined'){
+    alert('PDF库加载失败，请刷新页面重试');
+    btn.textContent='📄 导出PDF';
+    btn.disabled=false;
+    return;
+  }
+
+  const wrap=document.querySelector('.wrap');
+
+  // 使用html2canvas + jsPDF导出真正的PDF
+  html2canvas(wrap,{
+    scale:1.5,
+    useCORS:true,
+    backgroundColor:'#020510',
+    logging:false,
+    windowWidth:wrap.scrollWidth,
+    windowHeight:wrap.scrollHeight
+  }).then(canvas=>{
+    const imgData=canvas.toDataURL('image/png');
+    const {jsPDF}=window.jspdf;
+    const pdf=new jsPDF({
+      orientation:'landscape',
+      unit:'mm',
+      format:'a4'
+    });
+
+    const imgWidth=297; // A4横向宽度mm
+    const imgHeight=(canvas.height*imgWidth)/canvas.width;
+
+    // 如果高度超过一页，需要分页
+    const pageHeight=210; // A4横向高度mm
+    let heightLeft=imgHeight;
+    let position=0;
+
+    pdf.addImage(imgData,'PNG',0,position,imgWidth,imgHeight);
+    heightLeft-=pageHeight;
+
+    while(heightLeft>=0){
+      position=heightLeft-imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData,'PNG',0,position,imgWidth,imgHeight);
+      heightLeft-=pageHeight;
+    }
+
+    const filename=`蛇货战绩报告_${new Date().toISOString().slice(0,10)}.pdf`;
+    pdf.save(filename);
+
+    btn.textContent='📄 导出PDF';
+    btn.disabled=false;
+    showNotification('PDF已生成！');
+  }).catch(err=>{
+    console.error('PDF生成失败:',err);
+    btn.textContent='📄 导出PDF';
+    btn.disabled=false;
+    alert('PDF生成失败: '+err.message);
+  });
+}
+
+// 导出月份数据（JSON）
+function exportMonthlyData(){
+  const modal=document.createElement('div');
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:200;display:flex;align-items:center;justify-content:center';
+
+  modal.innerHTML=`
+    <div style="background:var(--bg2);border:2px solid var(--cyan);border-radius:12px;padding:24px;max-width:500px;width:90%">
+      <h3 style="color:var(--cyan);margin-bottom:16px;font-size:16px">📦 导出月份数据</h3>
+      <div style="margin-bottom:20px">
+        <label style="display:block;margin-bottom:12px">
+          <input type="checkbox" id="exportAll" checked onchange="toggleAllMonths(this.checked)" style="margin-right:8px">
+          <span style="color:var(--text);font-size:14px">全部数据</span>
+        </label>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-left:24px">
+          <label style="display:flex;align-items:center">
+            <input type="checkbox" class="month-checkbox" value="8" checked style="margin-right:6px">
+            <span style="color:var(--text);font-size:13px">8月</span>
+          </label>
+          <label style="display:flex;align-items:center">
+            <input type="checkbox" class="month-checkbox" value="9" checked style="margin-right:6px">
+            <span style="color:var(--text);font-size:13px">9月</span>
+          </label>
+          <label style="display:flex;align-items:center">
+            <input type="checkbox" class="month-checkbox" value="10" checked style="margin-right:6px">
+            <span style="color:var(--text);font-size:13px">10月</span>
+          </label>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn" onclick="closeExportModal()" style="padding:8px 20px">取消</button>
+        <button class="btn cyan" onclick="confirmExportMonthly()" style="padding:8px 20px">导出JSON</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+  window.currentExportModal=modal;
+}
+
+function toggleAllMonths(checked){
+  document.querySelectorAll('.month-checkbox').forEach(cb=>{
+    cb.checked=checked;
+  });
+}
+
+function closeExportModal(){
+  if(window.currentExportModal){
+    window.currentExportModal.remove();
+    window.currentExportModal=null;
+  }
+}
+
+function confirmExportMonthly(){
+  const exportAll=document.getElementById('exportAll').checked;
+  let selectedMonths=[];
+
+  if(!exportAll){
+    document.querySelectorAll('.month-checkbox:checked').forEach(cb=>{
+      selectedMonths.push(cb.value);
+    });
+
+    if(selectedMonths.length===0){
+      alert('请至少选择一个月份');
+      return;
+    }
+  }
+
+  // 筛选数据
+  let exportData={};
+
+  if(exportAll){
+    exportData=DATA;
+  }else{
+    Object.keys(DATA).forEach(date=>{
+      const month=date.split('.')[0];
+      if(selectedMonths.includes(month)){
+        exportData[date]=DATA[date];
+      }
+    });
+  }
+
+  if(Object.keys(exportData).length===0){
+    alert('选择的月份没有数据');
+    return;
+  }
+
+  // 导出JSON
+  const json=JSON.stringify(exportData,null,2);
+  const blob=new Blob([json],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+
+  const monthStr=exportAll?'全部':selectedMonths.join('_')+'月';
+  a.download=`蛇货战绩数据_${monthStr}_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  showNotification('数据已导出！');
+  closeExportModal();
+}
+
+// 全屏模式
+function toggleFullscreen(){
+  if(!document.fullscreenElement){
+    document.documentElement.requestFullscreen();
+  }else{
+    document.exitFullscreen();
+  }
+}
+
+// 自动刷新
+function toggleAutoRefresh(){
+  isAutoRefresh=!isAutoRefresh;
+  const btn=document.getElementById('autoRefreshBtn');
+
+  if(isAutoRefresh){
+    btn.classList.add('active');
+    btn.textContent='🔄 刷新中';
+    autoRefreshInterval=setInterval(()=>{
+      render();
+      showNotification('数据已刷新',1000);
+    },30000); // 每30秒刷新
+  }else{
+    btn.classList.remove('active');
+    btn.textContent='🔄 刷新';
+    if(autoRefreshInterval){
+      clearInterval(autoRefreshInterval);
+      autoRefreshInterval=null;
+    }
+  }
+}
+
+// 显示快捷键提示
+function showShortcuts(){
+  const hint=document.getElementById('shortcutHint');
+  hint.classList.add('show');
+  setTimeout(()=>hint.classList.remove('show'),5000);
+}
+
+// 通知提示
+function showNotification(message,duration=2000){
+  const notif=document.createElement('div');
+  notif.textContent=message;
+  notif.style.cssText=`position:fixed;top:20px;left:50%;transform:translateX(-50%);
+    background:var(--cyan);color:#000;padding:12px 24px;border-radius:6px;
+    font-size:14px;font-weight:600;z-index:10000;box-shadow:0 4px 20px rgba(0,229,255,0.4);
+    animation:slideDown 0.3s ease-out`;
+  document.body.appendChild(notif);
+
+  setTimeout(()=>{
+    notif.style.animation='slideUp 0.3s ease-out';
+    setTimeout(()=>document.body.removeChild(notif),300);
+  },duration);
+}
+
+// 快捷键支持
+document.addEventListener('keydown',e=>{
+  // Ctrl+K - 聚焦搜索
+  if(e.ctrlKey&&e.key==='k'){
+    e.preventDefault();
+    document.getElementById('searchBox').focus();
+  }
+  // Ctrl+R - 切换自动刷新
+  if(e.ctrlKey&&e.key==='r'){
+    e.preventDefault();
+    toggleAutoRefresh();
+  }
+  // Ctrl+E - 导出PDF
+  if(e.ctrlKey&&e.key==='e'){
+    e.preventDefault();
+    exportPDF();
+  }
+  // Esc - 关闭打开的面板
+  if(e.key==='Escape'){
+    if(selectorOpen)toggleProjectSelector();
+    if(comparisonMode)toggleComparison();
+    if(document.getElementById('drawer').classList.contains('open'))closeDrawer();
+  }
+});
+
+// 添加CSS动画
+const style=document.createElement('style');
+style.textContent=`
+  @keyframes slideDown{from{transform:translate(-50%,-100px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
+  @keyframes slideUp{from{transform:translate(-50%,0);opacity:1}to{transform:translate(-50%,-100px);opacity:0}}
+`;
+document.head.appendChild(style);
+
+// 图表响应式调整
+window.addEventListener('resize',debounce(()=>{
+  // 重新调整所有图表大小
+  document.querySelectorAll('[id$="Chart"]').forEach(el=>{
+    const instance=echarts.getInstanceByDom(el);
+    if(instance)instance.resize();
+  });
+},200));
+
+// 防抖函数
+function debounce(fn,delay){
+  let timer;
+  return function(...args){
+    clearTimeout(timer);
+    timer=setTimeout(()=>fn.apply(this,args),delay);
+  };
+}
+
+// 显示项目详情
+function showProjectDetail(projectName){
+  const days=getDays(month);
+  const projectStat=calc(projectName,days);
+  const roi=PRICE[projectName]?(projectStat.net*500/PRICE[projectName]*100).toFixed(1):0;
+  const winRate=projectStat.w+projectStat.l>0?(projectStat.w/(projectStat.w+projectStat.l)*100).toFixed(1):0;
+
+  // 计算连胜记录
+  let maxWinStreak=0,curWinStreak=0,maxLossStreak=0,curLossStreak=0;
+  days.forEach(d=>{
+    const v=DATA[d][projectName]||0;
+    if(v>0){curWinStreak++;maxWinStreak=Math.max(maxWinStreak,curWinStreak);curLossStreak=0}
+    else if(v<0){curLossStreak++;maxLossStreak=Math.max(maxLossStreak,curLossStreak);curWinStreak=0}
+    else{curWinStreak=0;curLossStreak=0}
+  });
+
+  // 显示弹窗
+  document.getElementById('detailTitle').textContent=`${projectName} 详细数据`;
+  document.getElementById('detailGrid').innerHTML=`
+    <div class="detail-item"><div class="label">累计净胜</div><div class="value" style="color:${projectStat.net>=0?'var(--green)':'var(--red)'}"> ${fmt(projectStat.net)}</div></div>
+    <div class="detail-item"><div class="label">胜/负场次</div><div class="value">${projectStat.w} / ${projectStat.l}</div></div>
+    <div class="detail-item"><div class="label">胜率</div><div class="value" style="color:var(--yellow)">${winRate}%</div></div>
+    <div class="detail-item"><div class="label">场均得分</div><div class="value">${(projectStat.net/projectStat.n).toFixed(2)}</div></div>
+    <div class="detail-item"><div class="label">投资回报率</div><div class="value" style="color:${roi>=0?'var(--green)':'var(--red)'}"> ${roi}%</div></div>
+    <div class="detail-item"><div class="label">货价</div><div class="value">${PRICE[projectName]||'—'}</div></div>
+    <div class="detail-item"><div class="label">最长连胜</div><div class="value" style="color:var(--green)">${maxWinStreak}天</div></div>
+    <div class="detail-item"><div class="label">最长连败</div><div class="value" style="color:var(--red)">${maxLossStreak}天</div></div>
+  `;
+
+  // 绘制趋势图
+  const detailChart=echarts.init(document.getElementById('detailChart'));
+  let cumulative=0;
+  const trendData=days.map(d=>{
+    cumulative+=DATA[d][projectName]||0;
+    return cumulative.toFixed(1);
+  });
+
+  detailChart.setOption({
+    backgroundColor:'transparent',
+    grid:{left:50,right:20,top:20,bottom:40},
+    xAxis:{type:'category',data:days,axisLabel:{color:'#7a8db4',fontSize:9,rotate:35},axisLine:{lineStyle:{color:'#2a3a55'}}},
+    yAxis:{type:'value',axisLabel:{color:'#7a8db4'},splitLine:{lineStyle:{color:'#1a2234'}}},
+    series:[{
+      type:'line',
+      data:trendData,
+      smooth:true,
+      lineStyle:{color:'var(--cyan)',width:3},
+      areaStyle:{color:{type:'linear',x:0,y:0,x2:0,y2:1,colorStops:[{offset:0,color:'rgba(0,229,255,0.3)'},{offset:1,color:'rgba(0,229,255,0.05)'}]}},
+      symbol:'circle',
+      symbolSize:6
+    }],
+    tooltip:{trigger:'axis',backgroundColor:'#1a2234',borderColor:'#2a3a55',textStyle:{color:'#e5edf7'}}
+  });
+
+  document.getElementById('detailModal').classList.add('show');
+}
+
+function closeDetailModal(event){
+  if(!event||event.target.id==='detailModal'){
+    document.getElementById('detailModal').classList.remove('show');
+  }
+}
+
+function render(){
+  const days=getDays(month);
+  let stats=PROJECTS.map(p=>({name:p,...calc(p,days)})).sort((a,b)=>b.net-a.net);
+
+  // 应用搜索过滤
+  if(searchTerm){
+    stats=stats.filter(s=>s.name.toLowerCase().includes(searchTerm));
+  }
+
+  // 计算选中项目的汇总数据
+  const selectedStats=selectedProjects.map(p=>({name:p,...calc(p,days)}));
+  const selectedTotal=selectedStats.reduce((s,x)=>s+x.net,0);
+  const selectedWin=selectedStats.filter(x=>x.net>0).length;
+
+  // 基于选中项目计算每日总计
+  const selectedDailyTotals=days.map(d=>selectedProjects.reduce((s,p)=>s+(DATA[d][p]||0),0));
+  const selectedBestDay=Math.max(...selectedDailyTotals);
+  const selectedWorstDay=Math.min(...selectedDailyTotals);
+  const selectedWinDays=selectedDailyTotals.filter(v=>v>0).length;
+  const selectedLossDays=selectedDailyTotals.filter(v=>v<0).length;
+  const selectedWinRate=(selectedWinDays/days.length*100).toFixed(1);
+
+  // 连胜统计（基于选中项目）
+  let maxWinStreak=0,curWinStreak=0,maxLossStreak=0,curLossStreak=0;
+  selectedDailyTotals.forEach(v=>{
+    if(v>0){curWinStreak++;maxWinStreak=Math.max(maxWinStreak,curWinStreak);curLossStreak=0}
+    else if(v<0){curLossStreak++;maxLossStreak=Math.max(maxLossStreak,curLossStreak);curWinStreak=0}
+    else{curWinStreak=0;curLossStreak=0}
+  });
+
+  // 显示选中项目信息
+  const projectInfo=selectedProjects.length===PROJECTS.length
+    ?'全部18项'
+    :selectedProjects.length<=3
+      ?selectedProjects.join('、')
+      :`${selectedProjects.slice(0,3).join('、')}等${selectedProjects.length}项`;
+
+  // KPI卡片 - 使用选中项目的数据
+  document.getElementById('kpi').innerHTML=`
+    <div class="kpi-card">
+      <div class="lbl">统计天数</div>
+      <div class="val cyan">${days.length}</div>
+      <div class="sub">${month==='all'?'8.13 - 10.18':month+'月数据'}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="lbl">总净胜分 <span style="font-size:10px;opacity:0.7">(${projectInfo})</span></div>
+      <div class="val ${selectedTotal>=0?'green':'red'}">${fmt(selectedTotal)}</div>
+      <div class="sub">每场500元 ≈ ${(selectedTotal*500/10000).toFixed(1)}万</div>
+    </div>
+    <div class="kpi-card">
+      <div class="lbl">盈利项目数</div>
+      <div class="val green">${selectedWin}<span style="font-size:18px;color:var(--text2)">/${selectedProjects.length}</span></div>
+      <div class="sub">TOP：${selectedStats.sort((a,b)=>b.net-a.net)[0].name}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="lbl">日胜率 <span style="font-size:10px;opacity:0.7">(${projectInfo})</span></div>
+      <div class="val yellow">${selectedWinRate}<span style="font-size:18px">%</span></div>
+      <div class="sub">${selectedWinDays}赢 / ${selectedLossDays}输 / ${days.length-selectedWinDays-selectedLossDays}平</div>
+    </div>
+    <div class="kpi-card">
+      <div class="lbl">最长连胜 <span style="font-size:10px;opacity:0.7">(${projectInfo})</span></div>
+      <div class="val green">${maxWinStreak}<span style="font-size:18px">天</span></div>
+      <div class="sub">最长连败：${maxLossStreak}天</div>
+    </div>
+    <div class="kpi-card">
+      <div class="lbl">单日极值 <span style="font-size:10px;opacity:0.7">(${projectInfo})</span></div>
+      <div class="val purple">${fmt(selectedBestDay)}</div>
+      <div class="sub">最差：${fmt(selectedWorstDay)}</div>
+    </div>`;
+
+  // 智能洞察 - 使用选中项目数据
+  document.getElementById('insight').textContent=generateInsight(selectedStats,days,selectedDailyTotals);
+
+  // 趋势预测
+  const trend=predictTrend(days,selectedStats);
+  if(trend){
+    document.getElementById('trendPredict').innerHTML=`<span>📊 趋势：</span><span style="color:var(--cyan);font-weight:600;margin-left:4px">${trend}</span>`;
+  }
+
+  // 风险评估
+  const risk=assessRisk(selectedStats,days);
+  document.getElementById('riskLevel').innerHTML=`<span style="color:${risk.color}">${risk.level}</span><span style="color:var(--text2);font-size:11px;margin-left:4px">(${risk.text})</span>`;
+
+  // 预警检查
+  checkAlert(selectedDailyTotals);
+
+  let html=`<tr><th>排名</th><th>项目</th><th>净胜</th><th>赢天</th><th>输天</th><th>场均</th><th>胜率</th><th>货价</th><th>操作</th></tr>`;
+  stats.forEach((s,i)=>{
+    const rc=i===0?'m1':i===1?'m2':i===2?'m3':'mn';
+    const wr=s.w+s.l>0?(s.w/(s.w+s.l)*100).toFixed(0)+'%':'—';
+    const wrColor=parseFloat(wr)>=60?'var(--green)':parseFloat(wr)>=40?'var(--yellow)':'var(--red)';
+    const rowClass=s.net>=0?'':'';
+    html+=`<tr style="${s.net<-5?'background:rgba(255,77,109,0.05)':''}${s.net>10?'background:rgba(0,255,157,0.03)':''}">
+      <td><span class="medal ${rc}">${i+1}</span></td>
+      <td class="name">${s.name}</td>
+      <td class="${s.net>=0?'pos':'neg'}">${fmt(s.net)}</td>
+      <td class="pos">${s.w}</td>
+      <td class="neg">${s.l}</td>
+      <td class="${s.net/s.n>=0?'pos':'neg'}">${(s.net/s.n).toFixed(2)}</td>
+      <td style="color:${wrColor}">${wr}</td>
+      <td style="color:var(--text2)">${PRICE[s.name]||'—'}</td>
+      <td><button class="btn" onclick="showProjectDetail('${s.name}')" style="font-size:10px;padding:4px 8px">详情</button></td>
+    </tr>`;
+  });
+  document.getElementById('rankTable').innerHTML=html;
+
+  // 饼图
+  echarts.dispose(document.getElementById('pieChart'));
+  const c0=echarts.init(document.getElementById('pieChart'));
+  c0.setOption({backgroundColor:'transparent',
+    tooltip:{trigger:'item',backgroundColor:'#1a2234',borderColor:'#2a3a55',textStyle:{color:'#e5edf7'}},
+    legend:{orient:'vertical',right:10,top:'middle',textStyle:{color:'#7a8db4',fontSize:11}},
+    series:[{type:'pie',radius:['40%','70%'],center:['35%','50%'],
+      data:stats.map(s=>({name:s.name,value:Math.abs(s.net),itemStyle:{color:s.net>=0?'#00ff9d':'#ff4d6d'}})),
+      label:{color:'#7a8db4',fontSize:10},itemStyle:{borderColor:'#0a1024',borderWidth:2},
+      emphasis:{scale:true,scaleSize:10}}]});
+
+  // 图表点击事件 - 数据钻取
+  c0.on('click',params=>{
+    showProjectDetail(params.name);
+  });
+
+  // 柱状图
+  echarts.dispose(document.getElementById('barChart'));
+  const c1=echarts.init(document.getElementById('barChart'));
+  c1.setOption({backgroundColor:'transparent',grid:{left:50,right:20,top:20,bottom:60},
+    xAxis:{type:'category',data:stats.map(s=>s.name),axisLabel:{color:'#7a8db4',rotate:35,fontSize:10},axisLine:{lineStyle:{color:'#2a3a55'}}},
+    yAxis:{type:'value',axisLabel:{color:'#7a8db4'},splitLine:{lineStyle:{color:'#1a2234'}}},
+    series:[{type:'bar',data:stats.map(s=>({value:s.net,itemStyle:{color:s.net>=0?'#00ff9d':'#ff4d6d',borderRadius:[4,4,0,0]}})),barWidth:14}],
+    tooltip:{trigger:'axis',backgroundColor:'#1a2234',borderColor:'#2a3a55',textStyle:{color:'#e5edf7'}}});
+
+  // 走势
+  const top5=stats.slice(0,5).map(s=>s.name);
+  echarts.dispose(document.getElementById('trendChart'));
+  const c2=echarts.init(document.getElementById('trendChart'));
+  c2.setOption({backgroundColor:'transparent',legend:{textStyle:{color:'#7a8db4',fontSize:11},top:0},grid:{left:50,right:20,top:35,bottom:40},
+    xAxis:{type:'category',data:days,axisLabel:{color:'#7a8db4',fontSize:10},axisLine:{lineStyle:{color:'#2a3a55'}}},
+    yAxis:{type:'value',axisLabel:{color:'#7a8db4'},splitLine:{lineStyle:{color:'#1a2234'}}},
+    series:top5.map(name=>{let c=0;return{name,type:'line',smooth:true,symbol:'none',lineStyle:{width:2},data:days.map(d=>{c+=DATA[d][name]||0;return+c.toFixed(1)})}}),
+    tooltip:{trigger:'axis',backgroundColor:'#1a2234',borderColor:'#2a3a55',textStyle:{color:'#e5edf7'}}});
+
+  // 热力图
+  echarts.dispose(document.getElementById('heatChart'));
+  const c3=echarts.init(document.getElementById('heatChart'));
+  const heatData=[];
+  days.forEach((d,i)=>{
+    PROJECTS.forEach((p,j)=>{
+      heatData.push([i,j,DATA[d][p]||0]);
+    });
+  });
+  c3.setOption({backgroundColor:'transparent',
+    tooltip:{position:'top',formatter:p=>`${days[p.data[0]]}<br/>${PROJECTS[p.data[1]]}: ${fmt(p.data[2])}`},
+    grid:{left:80,right:20,top:20,bottom:80},
+    xAxis:{type:'category',data:days,axisLabel:{color:'#7a8db4',fontSize:9,rotate:45},axisLine:{lineStyle:{color:'#2a3a55'}},splitArea:{show:true,areaStyle:{color:['rgba(10,16,36,0.3)','rgba(10,16,36,0.1)']}}},
+    yAxis:{type:'category',data:PROJECTS,axisLabel:{color:'#7a8db4',fontSize:10},axisLine:{lineStyle:{color:'#2a3a55'}},splitArea:{show:true,areaStyle:{color:['rgba(10,16,36,0.3)','rgba(10,16,36,0.1)']}}},
+    visualMap:{min:-5,max:3,calculable:true,orient:'horizontal',left:'center',bottom:10,textStyle:{color:'#7a8db4'},inRange:{color:['#ff4d6d','#1a2234','#00ff9d']}},
+    series:[{type:'heatmap',data:heatData,label:{show:false},emphasis:{itemStyle:{shadowBlur:10,shadowColor:'rgba(0,229,255,0.5)'}}}]});
+
+  // 雷达图
+  echarts.dispose(document.getElementById('radarChart'));
+  const c4=echarts.init(document.getElementById('radarChart'));
+  const top6=stats.slice(0,6);
+  c4.setOption({backgroundColor:'transparent',
+    tooltip:{},
+    legend:{textStyle:{color:'#7a8db4',fontSize:10},bottom:0},
+    radar:{indicator:[
+      {name:'净胜分',max:Math.max(...top6.map(s=>s.net))},
+      {name:'赢天数',max:Math.max(...top6.map(s=>s.w))},
+      {name:'胜率%',max:100},
+      {name:'场均',max:Math.max(...top6.map(s=>s.net/s.n))},
+      {name:'稳定性',max:100}
+    ],splitArea:{areaStyle:{color:['rgba(10,16,36,0.3)','rgba(10,16,36,0.1)']}},axisLine:{lineStyle:{color:'#2a3a55'}},splitLine:{lineStyle:{color:'#2a3a55'}},name:{textStyle:{color:'#7a8db4',fontSize:11}}},
+    series:[{type:'radar',data:top6.map(s=>({value:[s.net,s.w,(s.w/(s.w+s.l)*100).toFixed(1),s.net/s.n,(100-Math.abs(s.net/(s.w+s.l)-1)*20).toFixed(1)],name:s.name,areaStyle:{opacity:0.3}}))}]});
+
+  // ROI图
+  echarts.dispose(document.getElementById('roiChart'));
+  const c5=echarts.init(document.getElementById('roiChart'));
+  const roiStats=stats.map(s=>({name:s.name,roi:PRICE[s.name]?(s.net*500/PRICE[s.name]*100).toFixed(1):0})).sort((a,b)=>b.roi-a.roi);
+  c5.setOption({backgroundColor:'transparent',grid:{left:80,right:20,top:20,bottom:40},
+    xAxis:{type:'value',axisLabel:{color:'#7a8db4',formatter:'{value}%'},splitLine:{lineStyle:{color:'#1a2234'}}},
+    yAxis:{type:'category',data:roiStats.map(s=>s.name),axisLabel:{color:'#7a8db4',fontSize:10},axisLine:{lineStyle:{color:'#2a3a55'}}},
+    series:[{type:'bar',data:roiStats.map(s=>({value:s.roi,itemStyle:{color:s.roi>=0?'#00ff9d':'#ff4d6d',borderRadius:[0,4,4,0]}})),barWidth:12}],
+    tooltip:{trigger:'axis',backgroundColor:'#1a2234',borderColor:'#2a3a55',textStyle:{color:'#e5edf7'},formatter:p=>`${p[0].name}<br/>ROI: ${p[0].value}%`}});
+
+  // 胜率趋势
+  echarts.dispose(document.getElementById('winRateChart'));
+  const c6=echarts.init(document.getElementById('winRateChart'));
+  const winRateData=top5.map(name=>{
+    let w=0,l=0;
+    return{name,type:'line',smooth:true,symbol:'circle',symbolSize:4,data:days.map(d=>{
+      const v=DATA[d][name]||0;
+      if(v>0)w++;else if(v<0)l++;
+      return w+l>0?((w/(w+l))*100).toFixed(1):0;
+    })}
+  });
+  c6.setOption({backgroundColor:'transparent',legend:{textStyle:{color:'#7a8db4',fontSize:11},top:0},grid:{left:50,right:20,top:35,bottom:40},
+    xAxis:{type:'category',data:days,axisLabel:{color:'#7a8db4',fontSize:10},axisLine:{lineStyle:{color:'#2a3a55'}}},
+    yAxis:{type:'value',axisLabel:{color:'#7a8db4',formatter:'{value}%'},splitLine:{lineStyle:{color:'#1a2234'}},max:100},
+    series:winRateData,
+    tooltip:{trigger:'axis',backgroundColor:'#1a2234',borderColor:'#2a3a55',textStyle:{color:'#e5edf7'},formatter:p=>p.map(i=>`${i.seriesName}: ${i.value}%`).join('<br/>')}});
+
+  // 渲染月度明细表 - 使用当前选中的月份
+  renderMonthDetailTable(currentMonthDetail);
+}
+
+// 月度明细数据表
+function renderMonthDetailTable(selectedMonth){
+  const targetMonth=selectedMonth==='all'?'10':selectedMonth; // 默认显示当前月
+  const monthDays=getDays(targetMonth);
+
+  if(monthDays.length===0){
+    document.getElementById('monthDetailTable').innerHTML='<p style="color:var(--text2);text-align:center;padding:20px">该月份暂无数据</p>';
+    return;
+  }
+
+  let html='<table style="width:100%;font-size:12px"><thead><tr>';
+  html+='<th style="position:sticky;left:0;background:var(--card);z-index:2">日期</th>';
+  PROJECTS.forEach(p=>{
+    html+=`<th>${p}</th>`;
+  });
+  html+='<th style="background:rgba(0,229,255,0.1);font-weight:700">日合计</th></tr></thead><tbody>';
+
+  // 数据行
+  monthDays.forEach(date=>{
+    const dayData=DATA[date];
+    const dayTotal=PROJECTS.reduce((sum,p)=>sum+(dayData[p]||0),0);
+    const dayClass=dayTotal>0?'pos':dayTotal<0?'neg':'zero';
+
+    html+=`<tr>`;
+    html+=`<td style="position:sticky;left:0;background:var(--bg2);font-weight:600;border-right:1px solid var(--line)">${date}</td>`;
+
+    PROJECTS.forEach(p=>{
+      const val=dayData[p]||0;
+      const cellClass=val>0?'pos':val<0?'neg':'zero';
+      const bgColor=val>3?'rgba(0,255,157,0.1)':val<-3?'rgba(255,77,109,0.1)':'';
+      html+=`<td class="${cellClass}" style="background:${bgColor}">${fmt(val)}</td>`;
+    });
+
+    html+=`<td class="${dayClass}" style="background:rgba(0,229,255,0.05);font-weight:700;border-left:2px solid var(--cyan)">${fmt(dayTotal)}</td>`;
+    html+=`</tr>`;
+  });
+
+  // 合计行
+  html+=`<tr style="background:rgba(0,229,255,0.08);font-weight:700;border-top:2px solid var(--cyan)">`;
+  html+=`<td style="position:sticky;left:0;background:rgba(0,229,255,0.15);z-index:2">合计</td>`;
+
+  PROJECTS.forEach(p=>{
+    const total=monthDays.reduce((sum,d)=>sum+(DATA[d][p]||0),0);
+    const cellClass=total>0?'pos':total<0?'neg':'zero';
+    html+=`<td class="${cellClass}">${fmt(total)}</td>`;
+  });
+
+  const monthTotal=monthDays.reduce((sum,d)=>
+    sum+PROJECTS.reduce((s,p)=>s+(DATA[d][p]||0),0)
+  ,0);
+  const totalClass=monthTotal>0?'pos':monthTotal<0?'neg':'zero';
+  html+=`<td class="${totalClass}" style="background:rgba(0,229,255,0.15);border-left:2px solid var(--cyan);font-size:14px">${fmt(monthTotal)}</td>`;
+  html+=`</tr>`;
+
+  // 平均行
+  html+=`<tr style="background:rgba(0,229,255,0.05);font-weight:600;border-top:1px solid var(--line)">`;
+  html+=`<td style="position:sticky;left:0;background:rgba(0,229,255,0.1);z-index:2">日均</td>`;
+
+  PROJECTS.forEach(p=>{
+    const total=monthDays.reduce((sum,d)=>sum+(DATA[d][p]||0),0);
+    const avg=total/monthDays.length;
+    const cellClass=avg>0?'pos':avg<0?'neg':'zero';
+    html+=`<td class="${cellClass}">${fmt(avg)}</td>`;
+  });
+
+  const avgTotal=monthTotal/monthDays.length;
+  const avgClass=avgTotal>0?'pos':avgTotal<0?'neg':'zero';
+  html+=`<td class="${avgClass}" style="background:rgba(0,229,255,0.1);border-left:2px solid var(--cyan)">${fmt(avgTotal)}</td>`;
+  html+=`</tr>`;
+
+  html+=`</tbody></table>`;
+
+  document.getElementById('monthDetailTable').innerHTML=html;
+}
+
+// 切换月度明细显示
+// 动态识别有数据的月份
+function getAvailableMonths(){
+  const months=new Set();
+  Object.keys(DATA).forEach(date=>{
+    const month=date.split('.')[0];
+    months.add(month);
+  });
+  return Array.from(months).sort((a,b)=>Number(a)-Number(b));
+}
+
+function getDefaultMonth(){
+  const sysMonth=String(new Date().getMonth()+1); // 1-12月
+  const availableMonths=getAvailableMonths();
+
+  // 如果系统月份在数据范围内，使用系统月份
+  if(availableMonths.includes(sysMonth)){
+    return sysMonth;
+  }
+
+  // 否则返回最新的月份
+  return availableMonths[availableMonths.length-1]||'10';
+}
+
+let currentMonthDetail=getDefaultMonth();
+
+function switchMonthDetail(m){
+  currentMonthDetail=m;
+  renderMonthDetailTable(m);
+
+  // 更新按钮状态
+  document.querySelectorAll('#monthDetailBtns button[data-month]').forEach(btn=>{
+    if(btn.dataset.month===m){
+      btn.classList.add('active');
+      btn.style.background='linear-gradient(135deg,var(--cyan),#0099cc)';
+      btn.style.color='#000';
+      btn.style.fontWeight='700';
+    }else{
+      btn.classList.remove('active');
+      btn.style.background='';
+      btn.style.color='';
+      btn.style.fontWeight='';
+    }
+  });
+}
+
+// 导出月度明细CSV
+function exportMonthDetailCSV(){
+  const targetMonth=currentMonthDetail;
+  const monthDays=getDays(targetMonth);
+
+  if(monthDays.length===0){
+    alert('该月份暂无数据');
+    return;
+  }
+
+  // CSV头部
+  let csv='日期,'+PROJECTS.join(',')+',日合计\n';
+
+  // 数据行
+  monthDays.forEach(date=>{
+    const dayData=DATA[date];
+    const dayTotal=PROJECTS.reduce((sum,p)=>sum+(dayData[p]||0),0);
+    csv+=date+',';
+    csv+=PROJECTS.map(p=>dayData[p]||0).join(',')+',';
+    csv+=dayTotal.toFixed(1)+'\n';
+  });
+
+  // 合计行
+  csv+='合计,';
+  PROJECTS.forEach(p=>{
+    const total=monthDays.reduce((sum,d)=>sum+(DATA[d][p]||0),0);
+    csv+=total.toFixed(1)+',';
+  });
+  const monthTotal=monthDays.reduce((sum,d)=>
+    sum+PROJECTS.reduce((s,p)=>s+(DATA[d][p]||0),0)
+  ,0);
+  csv+=monthTotal.toFixed(1)+'\n';
+
+  // 日均行
+  csv+='日均,';
+  PROJECTS.forEach(p=>{
+    const total=monthDays.reduce((sum,d)=>sum+(DATA[d][p]||0),0);
+    const avg=total/monthDays.length;
+    csv+=avg.toFixed(2)+',';
+  });
+  const avgTotal=monthTotal/monthDays.length;
+  csv+=avgTotal.toFixed(2)+'\n';
+
+  // 导出文件
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'}); // BOM for Excel
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=`蛇货战绩明细_${targetMonth}月_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  showNotification('CSV已导出！');
+}
+
+// 导出导入
+function exportData(){
+  const blob=new Blob([JSON.stringify(DATA,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='蛇货战绩备份_'+new Date().toISOString().slice(0,10)+'.json';a.click();
+
+  // 记录备份时间
+  localStorage.setItem('lastBackupDate',new Date().toISOString().slice(0,10));
+  showNotification('数据已备份！');
+}
+
+// 检查备份提醒
+function checkBackupReminder(){
+  const lastBackup=localStorage.getItem('lastBackupDate');
+  const today=new Date().toISOString().slice(0,10);
+
+  if(!lastBackup){
+    // 首次使用，3秒后提醒
+    setTimeout(()=>{
+      showNotification('💾 建议定期导出数据备份，防止数据丢失',5000);
+    },3000);
+    return;
+  }
+
+  // 计算距离上次备份的天数
+  const lastDate=new Date(lastBackup);
+  const nowDate=new Date(today);
+  const daysSince=Math.floor((nowDate-lastDate)/(1000*60*60*24));
+
+  if(daysSince>=7){
+    setTimeout(()=>{
+      showNotification(`💾 已${daysSince}天未备份数据，建议点击"💾 全量备份"`,6000);
+    },3000);
+  }
+}
+function importData(e){
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{try{DATA=JSON.parse(r.result);localStorage.setItem('snakeData',JSON.stringify(DATA));render();alert('导入成功')}catch(err){alert('文件格式错误')}};
+  r.readAsText(f);
+}
+
+// 录入抽屉
+function openDrawer(){document.getElementById('drawer').classList.add('open')}
+function closeDrawer(){document.getElementById('drawer').classList.remove('open')}
+function todayDate(){document.getElementById('inputDate').value=new Date().toISOString().slice(0,10)}
+function buildFields(){
+  document.getElementById('fields').innerHTML=PROJECTS.map(p=>`<div class="fr-item"><span>${p}</span><b id="fv_${p}">${formVals[p]||0}</b></div>`).join('');
+  const t=Object.values(formVals).reduce((s,v)=>s+v,0);
+  const el=document.getElementById('dayTotal');
+  el.textContent='当日总分：'+fmt(t)+'（'+(t*500).toLocaleString()+'元）';
+  el.style.color=t>=0?'var(--green)':'var(--red)';
+}
+function parsePaste(){
+  const txt=document.getElementById('pasteBox').value;
+  PROJECTS.forEach(p=>{const m=txt.match(new RegExp(p+'\\s*([+-]?\\d+\\.?\\d*)'));if(m)formVals[p]=parseFloat(m[1])});
+  buildFields();
+}
+function resetForm(){formVals={};buildFields();document.getElementById('pasteBox').value=''}
+function saveDay(){
+  const date=document.getElementById('inputDate').value;
+  if(!date){alert('请选日期');return}
+  const key=parseInt(date.split('-')[1])+'.'+parseInt(date.split('-')[2]);
+  DATA[key]={...DATA[key],...formVals};
+  localStorage.setItem('snakeData',JSON.stringify(DATA));
+  closeDrawer();formVals={};buildFields();render();
+}
+
+document.getElementById('tabs').addEventListener('click',e=>{
+  if(e.target.classList.contains('tab')){
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    e.target.classList.add('active');month=e.target.dataset.m;render();
+  }
+});
+buildFields();render();
+// 初始化月度明细表为系统当前月份
+switchMonthDetail(currentMonthDetail);
+// 检查备份提醒
+checkBackupReminder();
+</script>
+</body>
+</html>
