@@ -414,6 +414,7 @@ const BUILTIN={
 "10.20":{"老尾":1,"新尾":1,"木同":0.5,"香港":1,"金沙":-2.5,"轻蛇":3,"马来":-2,"绿水":0,"ααα":3,"球员":1,"裁判":-0.5,"土狗":2,"彩虹":-3,"大":1.5,"小":2,"篮":1,"东欧":0,"猪头":-1}
 };
 
+// 数据加载逻辑：优先从云端加载，其次从LocalStorage，最后使用BUILTIN
 let DATA=JSON.parse(localStorage.getItem('snakeData')||'null')||JSON.parse(JSON.stringify(BUILTIN));
 let month='all';let formVals={};
 let searchTerm='';let isDarkMode=true;let comparisonMode=false;
@@ -422,6 +423,41 @@ let selectorOpen=false;
 let autoRefreshInterval=null;
 let isAutoRefresh=false;
 const chartCache=new Map(); // 图表缓存
+let cloudDataLoaded=false; // 云端数据加载标记
+
+// 从云端加载数据
+async function loadCloudData(){
+  try{
+    const response=await fetch('./data.json?t='+Date.now()); // 加时间戳防止缓存
+    if(!response.ok)throw new Error('云端数据加载失败');
+    const cloudData=await response.json();
+
+    // 合并云端数据和本地数据（本地优先，因为可能有未推送的新数据）
+    const localData=JSON.parse(localStorage.getItem('snakeData')||'null');
+    if(localData){
+      // 合并策略：本地有的日期用本地的，云端独有的日期用云端的
+      DATA={...cloudData,...localData};
+      console.log('✅ 数据已合并：云端数据 + 本地数据');
+    }else{
+      // 如果本地没数据，直接用云端数据
+      DATA=cloudData;
+      console.log('✅ 已加载云端数据');
+    }
+
+    cloudDataLoaded=true;
+    render(); // 重新渲染
+
+    // 提示用户数据已更新
+    const cloudDays=Object.keys(cloudData).length;
+    const localDays=localData?Object.keys(localData).length:0;
+    if(cloudDays>localDays){
+      showNotification(`☁️ 已加载云端最新数据（${cloudDays}天）`,3000);
+    }
+  }catch(err){
+    console.warn('☁️ 云端数据加载失败，使用本地/内置数据',err);
+    // 如果云端加载失败，继续使用已有的DATA（LocalStorage或BUILTIN）
+  }
+}
 let particlesEnabled=true;
 let clockInterval=null;
 
@@ -1532,6 +1568,8 @@ buildFields();render();
 switchMonthDetail(currentMonthDetail);
 // 检查备份提醒
 checkBackupReminder();
+// 加载云端数据
+loadCloudData();
 </script>
 </body>
 </html>
